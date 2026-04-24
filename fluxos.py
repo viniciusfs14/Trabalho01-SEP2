@@ -10,47 +10,59 @@ def calcular_fluxos(barras, circuitos, V, ang):
     }
 
     theta = np.radians(ang)
-    Vc = V * np.exp(1j * theta)
 
     for _, circuito in circuitos.iterrows():
 
         if circuito["estado"] != "L":
             continue
 
-        barra_k = int(circuito["de"])
-        barra_m = int(circuito["para"])
+        barra_m = int(circuito["de"])
+        barra_n = int(circuito["para"])
 
-        k = mapa_barras[barra_k]
         m = mapa_barras[barra_m]
+        n = mapa_barras[barra_n]
 
         r = circuito["r"]
         x = circuito["x"]
-        bsh = circuito["bsh"]
+        bsh_total = circuito["bsh"]
         tap = circuito["tap"]
-        defasagem = np.radians(circuito["defasagem"])
+        fi = - np.radians(circuito["defasagem"])
         cap = circuito["cap"]
+
+        if tap == 0:
+            tap = 1.0
 
         z = complex(r, x)
         y = 1 / z
-        ysh = 1j * bsh / 2
 
-        a = tap * np.exp(1j * defasagem)
+        g = y.real
+        b = y.imag
 
-        Vk = Vc[k]
-        Vm = Vc[m]
+        bsh_each = bsh_total / 2
 
-        Ikm = ((y + ysh) / (a * np.conj(a))) * Vk - (y / np.conj(a)) * Vm
-        Imk = (y + ysh) * Vm - (y / a) * Vk
+        delta_mn = theta[m] - theta[n] - fi
+        delta_nm = -delta_mn
 
-        Skm = Vk * np.conj(Ikm)
-        Smk = Vm * np.conj(Imk)
+        Pmn = (V[m] ** 2 / tap ** 2) * g - (V[m] * V[n] / tap) * (
+            g * np.cos(delta_mn) + b * np.sin(delta_mn)
+        )
 
-        perda = Skm + Smk
+        Qmn = -(V[m] ** 2 / tap ** 2) * (b + bsh_each) + (V[m] * V[n] / tap) * (
+            b * np.cos(delta_mn) - g * np.sin(delta_mn)
+        )
 
-        S_km_abs = abs(Skm)
-        S_mk_abs = abs(Smk)
+        Pnm = (V[n] ** 2) * g - (V[n] * V[m] / tap) * (
+            g * np.cos(delta_nm) + b * np.sin(delta_nm)
+        )
 
-        carregamento = max(S_km_abs, S_mk_abs)
+        Qnm = -(V[n] ** 2) * (b + bsh_each) + (V[n] * V[m] / tap) * (
+            b * np.cos(delta_nm) - g * np.sin(delta_nm)
+        )
+
+        Smn = np.sqrt(Pmn ** 2 + Qmn ** 2)
+        Snm = np.sqrt(Pnm ** 2 + Qnm ** 2)
+
+        carregamento = max(Smn, Snm)
 
         if carregamento > cap:
             status = "VIOLADO"
@@ -58,19 +70,20 @@ def calcular_fluxos(barras, circuitos, V, ang):
             status = "OK"
 
         resultados.append({
-            "de": barra_k,
-            "para": barra_m,
+            "de": barra_m,
+            "para": barra_n,
             "ncir": int(circuito["ncir"]),
-            "Pkm": Skm.real,
-            "Qkm": Skm.imag,
-            "Skm": S_km_abs,
-            "Pmk": Smk.real,
-            "Qmk": Smk.imag,
-            "Smk": S_mk_abs,
-            "Pperdas": perda.real,
-            "Qperdas": perda.imag,
+            "Pkm": Pmn,
+            "Qkm": Qmn,
+            "Skm": Smn,
+            "Pmk": Pnm,
+            "Qmk": Qnm,
+            "Smk": Snm,
+            "Pperdas": Pmn + Pnm,
+            "Qperdas": Qmn + Qnm,
             "cap": cap,
             "carregamento": carregamento,
+            "uso_%": 100 * carregamento / cap,
             "status": status
         })
 

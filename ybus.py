@@ -20,7 +20,7 @@ def montar_ybus(barras, circuitos):
         x = circuito["x"]
         bsh = circuito["bsh"]
         tap = circuito["tap"]
-        defasagem = np.deg2rad(circuito["defasagem"])
+        defasagem = - np.deg2rad(circuito["defasagem"])
 
         z = complex(r, x)
         y = 1 / z
